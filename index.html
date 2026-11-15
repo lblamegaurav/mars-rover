@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MARS : PROVIDENCE PROTOCOL | Acidalia Recovery</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2244%22 fill=%22%23b86e35%22/><circle cx=%2250%22 cy=%2250%22 r=%2220%22 fill=%22%23100b08%22/></svg>">
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <!-- 3D Three.js Render Viewport -->
+  <div id="canvas-container"></div>
+
+  <!-- Cinematic Vignette & Atmospheric Dust Shade -->
+  <div id="vignette-overlay"></div>
+
+  <!-- INTRO VIDEO (Smooth Fade In/Out, Reduced Transparency, Round Sound & Skip Controls) -->
+  <div id="intro-video-container">
+    <video id="intro-video" src="/videos/intro.mp4" playsinline autoplay></video>
+    <div class="intro-controls-row">
+      <button id="toggle-intro-audio-btn" class="intro-round-btn" title="Toggle Sound" aria-label="Toggle Sound">
+        <svg id="intro-audio-icon" class="intro-icon" viewBox="0 0 24 24">
+          <path id="audio-wave-path" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button id="skip-intro-btn" class="intro-round-btn" title="Skip Intro" aria-label="Skip Intro">
+        <svg class="intro-icon" viewBox="0 0 24 24">
+          <path d="M5 4l10 8-10 8V4zM19 5v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- WAKING UP SEQUENCE OVERLAY (EYELIDS & BLUR - ZERO TEXT) -->
+  <div id="wake-screen" style="display:none;">
+    <div id="eyelid-top" class="eyelid"></div>
+    <div id="eyelid-bottom" class="eyelid"></div>
+
+    <div id="wake-calibration-hud">
+      <div class="reticle-circle">
+        <div class="reticle-crosshair"></div>
+        <div class="reticle-crosshair vert"></div>
+        <div class="reticle-center"></div>
+      </div>
+    </div>
+
+    <button id="skip-wake-btn" style="display:none;">[ SKIP SEQUENCE ]</button>
+  </div>
+
+  <!-- EXPEDITION MODE SELECT MODAL (STRUCTURED, ROUNDED, EXPANDED & MINIMAL CLUTTER) -->
+  <div id="mode-select-modal" class="modal-dialog">
+    <div class="modal-content mode-select-content">
+      <h1 class="game-title" style="text-align:center; margin-bottom:8px; font-size:32px;">MARS : PROVIDENCE</h1>
+      <p class="mode-select-subtitle">Select mission deployment protocol to initiate surface operations</p>
+
+      <div class="mode-options-grid">
+        <!-- Option 1: Single Player (Clean, Spacious, No Callsign Clutter) -->
+        <div class="mode-card" id="mode-single-player">
+          <div class="mode-card-badge">PROTOCOL 01 // SOLO</div>
+          <h2 class="mode-card-title">SINGLE PLAYER</h2>
+          <div class="mode-card-description">
+            Autonomous surface exploration across Acidalia Planitia. Recover 8 vital colony survival modules before communications blackout.
+          </div>
+          <div class="mode-card-specs">
+            <div class="spec-pill">&#x25C8; SOLO EXPEDITION</div>
+            <div class="spec-pill">&#x25C8; 8 SURVIVAL BEACONS</div>
+            <div class="spec-pill">&#x25C8; DYNAMIC SEISMIC RADAR</div>
+          </div>
+          <div class="mode-card-spacer"></div>
+          <button id="btn-launch-solo" class="btn-primary mode-action-btn">
+            <span>START EXPEDITION</span>
+            <span>&rarr;</span>
+          </button>
+        </div>
+
+        <!-- Option 2: Multiplayer Co-Op (Supports up to 5-6 Players) -->
+        <div class="mode-card" id="mode-multiplayer">
+          <div class="mode-card-badge">PROTOCOL 02 // CO-OP (UP TO 6 PLAYERS)</div>
+          <h2 class="mode-card-title">MULTIPLAYER FLEET</h2>
+          <div class="mp-input-group" style="margin-top:4px; margin-bottom:12px;">
+            <label class="mp-label">ROVER CALLSIGN</label>
+            <input type="text" id="input-player-name" class="mp-text-input" value="Explorer Unit-01" maxlength="20" placeholder="Enter your callsign...">
+          </div>
+
+          <div class="mp-tabs">
+            <button id="tab-mp-create" class="mp-tab active">CREATE ROOM</button>
+            <button id="tab-mp-join" class="mp-tab">JOIN ROOM</button>
+          </div>
+
+          <!-- Create Room Tab -->
+          <div id="mp-panel-create" class="mp-panel active">
+            <div class="mp-input-group">
+              <label class="mp-label">ASSIGNED ROOM CODE</label>
+              <div class="room-code-display" id="display-room-code">MARS-4921</div>
+            </div>
+            <div class="mp-input-group">
+              <label class="mp-label">ROOM PASSWORD (OPTIONAL)</label>
+              <input type="password" id="input-host-password" class="mp-text-input" placeholder="Set room password (optional)...">
+            </div>
+            <button id="btn-create-room" class="btn-primary mode-action-btn">
+              <span>CREATE WAITING ROOM</span>
+              <span>&rarr;</span>
+            </button>
+          </div>
+
+          <!-- Join Room Tab -->
+          <div id="mp-panel-join" class="mp-panel">
+            <div class="mp-input-group">
+              <label class="mp-label">ENTER ROOM CODE</label>
+              <input type="text" id="input-join-code" class="mp-text-input" placeholder="e.g. MARS-4921" autocomplete="off" autocapitalize="characters">
+            </div>
+            <div class="mp-input-group">
+              <label class="mp-label">ROOM PASSWORD</label>
+              <input type="password" id="input-join-password" class="mp-text-input" placeholder="Enter password (if required)...">
+            </div>
+            <button id="btn-join-room" class="btn-primary mode-action-btn">
+              <span>JOIN WAITING ROOM</span>
+              <span>&rarr;</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MULTIPLAYER WAITING ROOM MODAL -->
+  <div id="waiting-room-modal" class="modal-dialog">
+    <div class="modal-content waiting-room-content">
+      <div class="waiting-room-header">
+        <h2 class="waiting-room-title">EXPEDITION WAITING ROOM</h2>
+        <div class="room-credentials-box">
+          <div class="cred-item">
+            <span class="cred-label">ROOM CODE:</span>
+            <span id="wr-room-code" class="cred-val">MARS-4921</span>
+            <button id="btn-copy-code" class="btn-copy-sm" title="Copy Room Code">COPY</button>
+          </div>
+          <div class="cred-item" id="wr-password-row">
+            <span class="cred-label">PASSWORD:</span>
+            <span id="wr-room-password" class="cred-val">NONE</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="roster-section">
+        <div class="roster-header">
+          <span>ROVER ROSTER</span>
+          <span id="wr-player-count">1 ROVER READY</span>
+        </div>
+        <div id="waiting-room-roster" class="roster-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div id="wr-status-banner" class="wr-status-banner">
+        WAITING FOR EXPLORERS TO ASSEMBLE...
+      </div>
+
+      <div class="waiting-room-actions">
+        <button id="btn-start-expedition" class="btn-primary" style="display:none;">
+          <span>START EXPEDITION</span>
+          <span>&rarr;</span>
+        </button>
+        <button id="btn-leave-waiting-room" class="btn-secondary">
+          <span>LEAVE ROOM</span>
+          <span>&times;</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TITLE & START MENU MODAL (HIDDEN / FALLBACK) -->
+  <div id="start-modal" style="display:none;"></div>
+
+  <!-- IN-GAME HUD -->
+  <div id="hud">
+    <!-- Top Floating FPS Badge (Shifted from bottom to top, Image 1) -->
+    <div id="top-fps-badge" class="fps-pill">60 FPS</div>
+
+    <!-- Top 360-Degree Compass Tape (No box, floating directional text & degrees) -->
+    <div id="compass-bar">
+      <div id="compass-tape">
+        <!-- Dynamically populated ticks & cardinal markers -->
+      </div>
+    </div>
+
+    <!-- Top-Left Enlarged Circular GPS Radar (No outer box, pure circular scope & distance) -->
+    <div id="sonar-panel">
+      <canvas id="sonar-canvas" width="150" height="150"></canvas>
+      <div id="sonar-distance-label" class="sonar-status">TARGET: 500M</div>
+    </div>
+
+    <!-- Left-Side Speedometer & Fuel Gauge Cluster (Image 2 & 3) -->
+    <div id="gauges-cluster-panel">
+      <div class="speedometer-box">
+        <canvas id="speedometer-canvas" width="136" height="136"></canvas>
+        <div class="speedo-digital-lcd" id="speedo-digital-display">0.0</div>
+      </div>
+
+      <!-- Fuel Gauge directly below Speedometer (Discharges slowly when stopped, charges high when moving) -->
+      <div class="fuel-gauge-box">
+        <div class="fuel-gauge-header">
+          <span class="fuel-label">FUEL</span>
+          <span class="fuel-percent" id="fuel-gauge-percent">82%</span>
+        </div>
+        <div class="fuel-track">
+          <div class="fuel-fill-bar" id="fuel-fill-bar" style="width: 82%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right-Side Stacked HUD Column (Separated & Flex-Aligned: Zero Overlap Guaranteed) -->
+    <div id="right-hud-column">
+      <!-- Top-Right Restored Telemetry Panel (Enlarged, Rounded, Header Line Removed) -->
+      <div id="telemetry-panel">
+        <div class="tele-chart-section">
+          <div class="chart-header">
+            <span class="chart-tag">ION</span>
+            <span class="chart-label">ALERT TOLERANCE</span>
+            <span class="chart-meta">[A1A DR10]</span>
+          </div>
+          <canvas id="alert-tolerance-canvas" width="280" height="70"></canvas>
+        </div>
+        <div class="tele-chart-section">
+          <div class="chart-header">
+            <span class="chart-tag">T20</span>
+            <span class="chart-label">SEISMIC VIBRATION</span>
+            <span class="chart-meta">1.00</span>
+          </div>
+          <canvas id="seismic-vibration-canvas" width="280" height="70"></canvas>
+        </div>
+      </div>
+
+      <!-- Right-Side Live Camera Feed (Image 4 Optimization, Zero FPS Drop, Corner Brackets) -->
+      <div id="camera-feed-panel">
+        <div class="camera-feed-header">
+          <span class="camera-feed-title">CAMERA FEED</span>
+        </div>
+        <div class="camera-feed-screen">
+          <canvas id="camera-feed-canvas" width="280" height="155"></canvas>
+          <div class="cam-bracket top-left"></div>
+          <div class="cam-bracket top-right"></div>
+          <div class="cam-bracket bottom-left"></div>
+          <div class="cam-bracket bottom-right"></div>
+          <div class="cam-scanline-overlay"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom-Left Collected Artifacts Display (Not stretched, proper spacing, vertical dividers |) -->
+    <div id="collected-artifacts-container">
+      <div class="artifacts-display-header">
+        <span class="artifacts-display-title">SALVAGED ARTIFACTS</span>
+      </div>
+      <div class="artifacts-display-slots-row">
+        <div class="artifact-slot-cell" data-slot="0"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="1"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="2"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="3"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="4"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="5"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="6"></div>
+        <div class="artifact-slot-divider">|</div>
+        <div class="artifact-slot-cell" data-slot="7"></div>
+        <canvas id="collected-artifacts-canvas" width="460" height="54"></canvas>
+      </div>
+    </div>
+
+    <!-- Right-Side FPP & TPP Camera Perspective Toggle (Key 1: FPP / Key 2: TPP) -->
+    <div id="camera-zoom-toggle">
+      <button id="btn-view-fpp" class="view-toggle-btn" title="First Person Perspective (Key 1)">FPP</button>
+      <button id="btn-view-tpp" class="view-toggle-btn active" title="Third Person Perspective (Key 2)">TPP</button>
+    </div>
+
+    <!-- Proximity Alert Banner -->
+    <div id="proximity-banner">
+      <span style="color:#d98a4a;">&#x25C6; BEACON DETECTED</span>
+      <span id="proximity-target-text">CRYO-SEED VAULT (45M)</span>
+    </div>
+
+    <!-- In-Game Toast Alert -->
+    <div id="mission-toast"></div>
+
+    <!-- Circular Crosshair Rover Movement Controller (Image 1 Redesign) -->
+    <div id="rover-controls-panel">
+      <!-- Circular Crosshair D-Pad -->
+      <div id="touch-controls" class="circular-crosshair-hud">
+        <!-- Connecting Crosshair Reticle Ring & Lines -->
+        <div class="crosshair-outer-ring"></div>
+        <div class="crosshair-reticle-line h"></div>
+        <div class="crosshair-reticle-line v"></div>
+
+        <!-- 1. FORWARD / TOP CROSSHAIR PAD -->
+        <button id="btn-forward" class="touch-btn crosshair-pad pad-top" title="Forward (W / Up)" aria-label="Forward">
+          <svg class="crosshair-icon" viewBox="0 0 24 24">
+            <path d="M6 15 L12 8 L18 15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- 2. LEFT CROSSHAIR PAD -->
+        <button id="btn-left" class="touch-btn crosshair-pad pad-left" title="Steer Left (A / Left)" aria-label="Steer Left">
+          <svg class="crosshair-icon" viewBox="0 0 24 24">
+            <path d="M15 6 L8 12 L15 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- 3. CENTER / MIDDLE SCAN DISC -->
+        <button id="btn-scan" class="touch-btn crosshair-center-disc" title="Seismic Ping (Space / E)" aria-label="Seismic Scan">
+          <div class="center-disc-inner"></div>
+          <div class="center-disc-ring"></div>
+        </button>
+
+        <!-- 4. RIGHT CROSSHAIR PAD -->
+        <button id="btn-right" class="touch-btn crosshair-pad pad-right" title="Steer Right (D / Right)" aria-label="Steer Right">
+          <svg class="crosshair-icon" viewBox="0 0 24 24">
+            <path d="M9 6 L16 12 L9 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- 5. BACKWARD / REVERSE CROSSHAIR PAD -->
+        <button id="btn-backward" class="touch-btn crosshair-pad pad-bottom" title="Reverse / Brake (S / Down)" aria-label="Reverse">
+          <svg class="crosshair-icon" viewBox="0 0 24 24">
+            <path d="M6 9 L12 16 L18 9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD / EXPEDITION ARCHIVE MODAL -->
+  <div id="leaderboard-modal" class="modal-dialog">
+    <div class="modal-content">
+      <div class="brand-badge">CENTRAL SURVIVAL ARCHIVE</div>
+      <h2 style="font-family:var(--font-display); font-size:22px; text-transform:uppercase; margin-bottom:12px;">
+        EXPEDITION RECORDS
+      </h2>
+      <p style="font-size:11px; color:var(--color-text-muted); margin-bottom:14px;">
+        Telemetry logs from Acidalia Planitia recovery missions.
+      </p>
+
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>RANK</th>
+            <th>MISSION ID</th>
+            <th>SALVAGE</th>
+            <th>TIME</th>
+            <th>DISTANCE</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <!-- Populated from LocalStorage -->
+        </tbody>
+      </table>
+
+      <button id="btn-close-leaderboard" class="btn-secondary">
+        <span>CLOSE ARCHIVE</span>
+        <span>&times;</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MISSION DIRECTIVES / CONTROLS HELP MODAL -->
+  <div id="help-modal" class="modal-dialog">
+    <div class="modal-content">
+      <div class="brand-badge">OPERATIONAL MANUAL</div>
+      <h2 style="font-family:var(--font-display); font-size:22px; text-transform:uppercase; margin-bottom:12px;">
+        ROVER CONTROL SYSTEM
+      </h2>
+      
+      <div class="crash-log-box" style="font-size:11.5px;">
+        <strong>LOCOMOTION:</strong><br>
+        &bull; <strong>W / Up Arrow / [FWD] Button:</strong> Drive Forward<br>
+        &bull; <strong>S / Down Arrow / [REV] Button:</strong> Reverse / Decelerate<br>
+        &bull; <strong>A / Left Arrow / [LEFT] Button:</strong> Steer Left<br>
+        &bull; <strong>D / Right Arrow / [RIGHT] Button:</strong> Steer Right<br>
+        &bull; <strong>Shift / Space:</strong> Handbrake / Emergency Stop<br><br>
+        
+        <strong>SEISMIC NAVIGATION & RECOVERY:</strong><br>
+        &bull; <strong>Spacebar / [SCAN] Button:</strong> Emits seismic pulse to pinpoint distant beacons.<br>
+        &bull; <strong>Top Compass Tape:</strong> Ticks and diamond pips guide you toward the nearest cargo.<br>
+        &bull; <strong>Radar Chirps:</strong> Acoustic audio beeps accelerate as you approach within range.<br>
+        &bull; <strong>F Key / [LIGHTS]:</strong> Toggle volumetric dust searchlights.<br>
+        &bull; <strong>C Key / [CAM]:</strong> Switch between Cinematic Dune Chase & Rover Mast Sensor View.<br>
+        &bull; <strong>M Key / [AUDIO]:</strong> Toggle synthesized sound effects.
+      </div>
+
+      <button id="btn-close-help" class="btn-secondary">
+        <span>ACKNOWLEDGE & RETURN</span>
+        <span>&times;</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- VICTORY / MISSION COMPLETE MODAL -->
+  <div id="victory-modal" class="modal-dialog">
+    <div class="modal-content">
+      <div class="brand-badge" style="border-color:var(--color-accent-amber); color:var(--color-text-main);">
+        MISSION OBJECTIVE ACHIEVED
+      </div>
+      <h2 style="font-family:var(--font-display); font-size:26px; color:var(--color-text-main); text-transform:uppercase; margin-bottom:10px;">
+        ALL 8 SURVIVAL MODULES SECURED
+      </h2>
+      <div class="crash-log-box">
+        <strong>SURVIVAL LOG RECORDED:</strong><br>
+        Cryo-seeds, water extraction sieve, RTG core, atmospheric scrubbers, and long-range transponder have been salvaged.
+        Emergency sub-space beacon deployed. Colony foundation established on Acidalia Planitia.
+      </div>
+
+      <div style="margin-bottom:20px; font-size:12px; display:flex; justify-content:space-around; background:var(--color-surface-dim); padding:14px; border:1px solid var(--color-border);">
+        <div>
+          <div style="color:var(--color-text-muted); font-size:10px;">TOTAL TIME</div>
+          <div id="vic-time" style="font-size:16px; font-weight:700; color:var(--color-accent-amber);">00:00</div>
+        </div>
+        <div>
+          <div style="color:var(--color-text-muted); font-size:10px;">TOTAL DISTANCE</div>
+          <div id="vic-dist" style="font-size:16px; font-weight:700; color:var(--color-accent-amber);">0.0 KM</div>
+        </div>
+        <div>
+          <div style="color:var(--color-text-muted); font-size:10px;">SALVAGE RATING</div>
+          <div style="font-size:16px; font-weight:700; color:var(--color-text-main);">ALPHA PRIME</div>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button id="btn-replay" class="btn-primary">
+          <span>START NEW EXPEDITION</span>
+          <span>&rarr;</span>
+        </button>
+        <button id="btn-victory-leaderboard" class="btn-secondary">
+          <span>VIEW EXPEDITION ARCHIVE</span>
+          <span>// RECORDS</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
